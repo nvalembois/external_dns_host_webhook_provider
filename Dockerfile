@@ -1,12 +1,12 @@
 FROM docker.io/library/rust:1.81.0-alpine3.20 AS build
 
-COPY src/ Cargo.lock Cargo.toml /tmp/
+COPY Cargo.toml Cargo.lock /tmp/
+COPY src /tmp/src/
 
 WORKDIR /tmp
 
 RUN set -e && \
   apk add --no-cache musl-dev build-base && \
-  cat Cargo.toml && \
   cargo build --release
 
 FROM docker.io/library/alpine:3.20.3
