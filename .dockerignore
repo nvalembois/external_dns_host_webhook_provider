@@ -2,3 +2,5 @@ Dockerfile
 .git/**
 .gitignore
 target/**
+.github/**
+renovate.json
