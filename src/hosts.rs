@@ -28,8 +28,8 @@ pub fn read_host() -> Records {
                     let dns_name = parts[0].to_string();
                     let targets = vec![parts[1].to_string()];
                     let record_type: RecordType = RecordType::A;
-                    let set_identifier: String = String::from("");
-                    let record_t_t_l: TTL = 0;
+                    let set_identifier: Option<String> = Option::None;
+                    let record_t_t_l: Option<TTL> = Option::None;
                     let labels: Option<Labels> = Option::None;
                     let provider_specific: Option<ProviderSpecific>=Option::None;
                     records.push(Endpoint { dns_name, targets, record_type, set_identifier, record_t_t_l, labels, provider_specific });
@@ -46,7 +46,7 @@ pub fn read_host() -> Records {
 
 pub fn write_host(records: &Records) -> std::io::Result<()> {
     // Ouvre le fichier hosts en lecture
-    let mut file = std::fs::OpenOptions::new().write(true).open(&CONFIG.host_file_path)?;
+    let mut file = std::fs::OpenOptions::new().write(true).create(true).open(&CONFIG.host_file_path)?;
     for record in records {
         for ip in &record.targets {
             let entry = format!("{ip} {}\n", record.dns_name);

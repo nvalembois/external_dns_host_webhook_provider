@@ -1,8 +1,8 @@
 use salvo::prelude::*;
-use serde::{Serialize,Deserialize};
+use serde::{Deserialize, Serialize};
 use tracing::info;
 use core::str;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 
 use crate::hosts::{read_host, write_host};
 
@@ -31,7 +31,7 @@ pub type Targets = Vec<String>;
 pub type Labels = HashMap<String,String>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all(serialize = "camelCase", deserialize = "snake_case"))]
+#[serde(rename_all(serialize = "snake_case", deserialize = "camelCase"))]
 pub struct Endpoint {
 	// The hostname of the DNS record
 	pub dns_name: String,
@@ -40,9 +40,9 @@ pub struct Endpoint {
 	// RecordType type of record, e.g. CNAME, A, AAAA, SRV, TXT etc
 	pub record_type: RecordType,
 	// Identifier to distinguish multiple records with the same name and type (e.g. Route53 records with routing policies other than 'simple')
-	pub set_identifier: String,
+	pub set_identifier: Option<String>,
 	// TTL for the record
-	pub record_t_t_l: TTL,
+	pub record_t_t_l: Option<TTL>,
 	// Labels stores labels defined for the Endpoint
 	pub labels: Option<Labels>,
 	// ProviderSpecific stores provider specific config
@@ -118,22 +118,42 @@ pub async fn post_records(req: &mut Request, res: &mut Response) {
     }
 }
 
+
 #[handler]
 pub async fn post_adjustendpoints(req: &mut Request, res: &mut Response) {
+    let records: Records = match req.parse_json().await {
+        Ok(records) => records,
+        Err(e) => {
+            info!("Impossible de lire le corps de la requête en tant que texte UTF-8 : {}.", e);
+            res.render(Text::Plain(e.to_string()));
+            res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
+            return;
+        }
+    };
 
-    match req.take_body() {
-        salvo::http::ReqBody::None=>info!("Empty body"),
-        salvo::http::ReqBody::Once(body_bytes)=>{
-            if let Ok(body_str) = str::from_utf8(&body_bytes) {
-                info!("Corps de la requête : {}",body_str);
-            } else {
-                info!("Impossible de lire le corps de la requête en tant que texte UTF-8.");
-            }},
-        salvo::http::ReqBody::Hyper{inner,fusewire}=>info!("Hyper"),
-        salvo::http::ReqBody::Boxed{inner,fusewire}=>info!("Boxed"),
-        _ => info!("Other") };
+    for e in &records {
+        info!("-- endpoint dns_name={}, targets={}, type={:?}", e.dns_name, e.targets.join(","), e.record_type);
+    }
+    
+    match write_host(&records) {
+        Err(e) => {
+            info!("Failed to write hosts: {:?}", e);
+            res.render(Text::Plain(e.to_string()));
+            res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
+            return;
+        }
+        _ => {}
+    }
 
-    // Répondre à la requête après affichage
-    res.render(Text::Plain("Corps de la requête reçu et affiché."));
-    res.status_code(StatusCode::OK);
+    match serde_json::to_string(&records) {
+        Ok(json) => {
+            res.status_code(StatusCode::OK);
+            res.render(Text::Json(json));
+        }
+        Err(e) => {
+            eprintln!("Erreur lors de la conversion en JSON: {}", e);
+            res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
+            res.render(Text::Plain("Erreur lors de la conversion en JSON"));
+        }
+    }
 }

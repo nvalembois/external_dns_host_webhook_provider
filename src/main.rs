@@ -1,4 +1,4 @@
-use host_webhook_provider::config::{DomainFilter, DOMAIN_FILTER, CONFIG};
+use host_webhook_provider::config::CONFIG;
 use host_webhook_provider::records::{get_records, post_adjustendpoints, post_records};
 use salvo::logging::Logger;
 use salvo::server::ServerHandle;
@@ -15,20 +15,6 @@ async fn get_healthz(res: &mut Response) {
 
 #[handler]
 async fn get_root(req: &mut Request, res: &mut Response) {
-    // Récupérer le corps de la requête en tant que JSON
-    // let new_domain_filter: DomainFilter = match req.parse_json().await {
-    //     Ok(domain_filter) => domain_filter,
-    //     Err(_) => {
-    //         error!("invalid input");
-    //         res.status_code(StatusCode::BAD_REQUEST);
-    //         res.render(Text::Plain("Invalid JSON input"));
-    //         return;
-    //     }
-    // };
-    // {
-    //     let mut domain_filter = DOMAIN_FILTER.lock().unwrap();
-    //     *domain_filter = new_domain_filter;
-    // }
     let value: String = match req.header("Accept") {
         Option::Some(value) => { value }
         Option::None => {
@@ -37,8 +23,13 @@ async fn get_root(req: &mut Request, res: &mut Response) {
             return;
         }
     };
+    if let Err(err) = res.add_header("Content-Type", value, true) {
+        res.status_code(StatusCode::BAD_REQUEST);
+        res.render(Text::Plain(format!("Failed to add header Content-Type: {}",err.to_string())));
+        return;
+    };
 
-    let domain_filter = DOMAIN_FILTER.clone();
+    let domain_filter = CONFIG.domain_filter.clone();
     match serde_json::to_string(&domain_filter) {
         Ok(json) => {
             res.status_code(StatusCode::OK);
@@ -51,25 +42,32 @@ async fn get_root(req: &mut Request, res: &mut Response) {
         }
     }
     
-    match res.add_header("Content-Type", value, true) {
-        Ok (_) => {}
-        Err(err) => {
-            res.status_code(StatusCode::BAD_REQUEST);
-            res.render(Text::Plain(format!("Failed to add header Content-Type: {}",err.to_string())));
-            return;
+}
+
+#[handler]
+async fn alter_content_type(req: &mut Request) {
+    if let Some(value) = req.header("Content-Type") {
+        let value: String = value;
+        if value == "application/external.dns.webhook+json;version=1" {
+            if let Err(e) = req.add_header("Content-Type", "application/json;version=1", true) {
+                info!("Failed to replace Content-Type: {:?}", e);
+            }
         }
-    };
+    }
 }
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt().init();
-    info!("Config: dry_run={}", &CONFIG.dry_run);
-    info!("Config: dns_prefix={}", &CONFIG.dns_prefix);
+    info!("Config: filters={}", &CONFIG.domain_filter.filters.join(","));
+    info!("Config: exclude={}", &CONFIG.domain_filter.exclude.join(","));
+    info!("Config: regex={}", &CONFIG.domain_filter.regex);
+    info!("Config: regex_exclusion={}", &CONFIG.domain_filter.regex_exclusion);
     info!("Config: host_file_path={}", &CONFIG.host_file_path);
     info!("Config: listen_addr={}", &CONFIG.listen_addr);
 
     let router = Router::new()
+        .hoop(alter_content_type)
         .get(get_root)
         .push(Router::with_path("records").get(get_records).post(post_records))
         .push(Router::with_path("adjustendpoints").post(post_adjustendpoints))
