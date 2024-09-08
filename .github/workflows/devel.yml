@@ -1,0 +1,44 @@
+name: Build and test rust application
+
+on:
+  push:
+    branches-ignore: [ "main" ]
+    paths:
+      - '.github/workflows/devel.yml'
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            archive: tar.gz
+    steps:
+      - 
+        name: Checkout
+        uses: actions/checkout@master
+      - 
+        name: Compile
+        uses: rust-build/rust-build.action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          RUSTTARGET: ${{ matrix.target }}
+          SRC_DIR: "source"
+          ARCHIVE_TYPES: ${{ matrix.archive }}
+          MINIFY: "yes"
+      # - 
+      #   name: Test
+      #   run: go test -v ./...
