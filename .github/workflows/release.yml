@@ -6,9 +6,9 @@ on:
       - closed
     branches: [ "master" ]
     paths:
-      - 'source/src/**.rs'
-      - 'source/Cargo.lock'
-      - 'source/Cargo.toml'
+      - 'src/**.rs'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
       - 'Dockerfile'
 
 jobs:

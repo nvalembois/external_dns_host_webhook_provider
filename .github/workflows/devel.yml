@@ -2,12 +2,12 @@ name: Build and test rust application
 
 on:
   push:
-    branches-ignore: [ "main" ]
+    branches-ignore: [ "master" ]
     paths:
-      - '.github/workflows/devel.yml'
-      - '**.go'
-      - 'go.mod'
-      - 'go.sum'
+      - 'src/**.rs'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'Dockerfile'
 
 env:
   REGISTRY: ghcr.io
