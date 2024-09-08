@@ -1,6 +1,6 @@
 FROM docker.io/library/rust:1.81.0-alpine3.20 AS build
 
-COPY source/ /tmp/
+COPY src/ Cargo.lock Cargo.toml /tmp/
 
 WORKDIR /tmp
 
