@@ -1,13 +1,12 @@
 name: Delete Image on Branch Deletion
 
 on:
-  delete:
-    branches-ignore: [ "latest" ]
+  delete
+
 
 env:
-    DOCKER_REPOSITORY: ghcr.io
-    IMAGE_NAME: ${{ github.repository }}
-      
+  DOCKER_REPOSITORY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   delete-image:
@@ -26,8 +25,6 @@ jobs:
     
       - name: Delete Docker Image
         run: |
-          IMAGE_NAME=<image-name>:$(echo ${GITHUB_REF#refs/heads/} | tr '/' '-')
-          echo "Deleting image $IMAGE_NAME"
-          docker rmi ${IMAGE_NAME}
-        # env:
-        #   DOCKER_REPOSITORY: <your-docker-repository>
+          IMAGE_ID=${IMAGE_NAME}:$(echo ${GITHUB_REF#refs/heads/} | tr '/' '-')
+          echo "Deleting image $IMAGE_ID"
+          docker rmi ${IMAGE_ID}
