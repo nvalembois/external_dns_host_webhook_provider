@@ -1,0 +1,13 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "extends": [
+      "config:base"
+    ],
+    "baseBranches": ["master"],
+    "timezone": "Europe/Paris",
+    "schedule": ["before 1am"],
+    "prCreation": "immediate",
+    "automerge": true,
+    "prHourlyLimit": 15
+  }
+  
