@@ -5,7 +5,7 @@ on:
   pull_request:
     types:
       - closed
-    branches: [ "master" ]
+    branches: [ "latest" ]
     paths:
       - 'src/**.rs'
       - 'Cargo.lock'
@@ -39,7 +39,7 @@ jobs:
         name: Create a GitHub release
         uses: softprops/action-gh-release@v2 # https://github.com/ncipollo/release-action
         with:
-          tag_name:  ${{ steps.tag_version.outputs.new_tag }}
+          tag_name: ${{ steps.tag_version.outputs.new_tag }}
           name: Release ${{ steps.tag_version.outputs.new_tag }}
           body: ${{ steps.tag_version.outputs.changelog }}
           # token: ${{ secrets.REPO_TOKEN }} # GITHUB_TOKEN can't trigger new workflows
@@ -72,7 +72,7 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ github.repository }}:latest
+            ${{ github.repository }}:${{ github.ref }}
             ${{ github.repository }}:${{ steps.tag_version.outputs.new_tag }}
           annotations: ${{ steps.metadata.outputs.annotations }}
           labels: ${{ steps.metadata.outputs.labels }}
