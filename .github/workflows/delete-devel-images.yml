@@ -3,28 +3,39 @@ name: Delete Image on Branch Deletion
 on:
   delete
 
-
 env:
   DOCKER_REPOSITORY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   delete-image:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    if: github.event.ref_type == 'branch'  # Vérifie que le type de référence supprimée est bien une branche
     steps:
-      - name: Check if ref is a branch
-        if: startsWith(github.event.ref, 'refs/heads/')
-        run: echo "Branch ${GITHUB_REF} has been deleted."
-     
-      - name: Login to registry ${{ env.DOCKER_REPOSITORY }}
-        uses: docker/login-action@v3  # https://github.com/docker/login-action
-        with:
-            registry: ${{ env.DOCKER_REPOSITORY }}
-            username: ${{ github.actor }}
-            password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Display info
+        run: echo "Branch ${{ github.event.ref }} has been deleted."
     
-      - name: Delete Docker Image
+      - name: Delete Docker Image from GHCR
+        env:
+          IMAGE_NAME: ${{ github.repository }}
         run: |
-          IMAGE_ID=${IMAGE_NAME}:$(echo ${GITHUB_REF#refs/heads/} | tr '/' '-')
-          echo "Deleting image $IMAGE_ID"
-          docker rmi ${IMAGE_ID}
+          H="Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}"
+          A='Accept: application/vnd.github+json'
+          IMAGE="${IMAGE_NAME##*/}"
+          url="https://api.github.com/user/packages/container/${IMAGE}/versions"
+          echo "Get ${IMAGE} versions at $url"
+          versions="$(curl -s -H "$H" -H "$A" "$url")"
+          echo "Versions: $versions"
+          filter='.[] | select(.metadata.container.tags[] == $v) | .id'
+          PACKAGE_ID=$(echo $versions | jq --arg v ${{ github.event.ref }} -r "$filter")
+          
+          if [ -z "$PACKAGE_ID" ]; then
+            echo "No image found for tag $IMAGE_TAG."
+          else
+            # Supprime l'image avec l'ID du package
+            curl -s -X DELETE -H "$H" -H "$A" https://api.github.com/user/packages/container/${IMAGE}/versions/$PACKAGE_ID
+            echo "Image with tag $IMAGE_TAG has been deleted."
+          fi
+
