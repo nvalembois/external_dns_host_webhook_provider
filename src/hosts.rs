@@ -1,18 +1,23 @@
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
-
+use once_cell::sync::Lazy;
+use regex::Regex;
+use tracing::{info,error};
 use crate::config::CONFIG;
-use crate::records::{Endpoint, Labels, ProviderSpecific, RecordType, Records, TTL};
 
+static HOST_REGEXP: &str = r"(?m)^\s*(?P<address>[0-9\.:]+)\s+(?P<name>[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)\s*$";
 
-pub fn read_host() -> Records {
-    let mut records = Records::new();
+// return HashMap<name, ips>
+pub fn read_host() -> HashMap<String,HashSet<String>> {
+    let mut records: HashMap<String,HashSet<String>> = HashMap::new();
+    static RE: Lazy<Regex> = Lazy::new(|| Regex::new(&HOST_REGEXP).unwrap());
 
     // Ouvre le fichier hosts en lecture
     let file = match File::open(&CONFIG.host_file_path) {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("Erreur lors de l'ouverture du fichier hosts: {}", e);
+            error!("Erreur lors de l'ouverture du fichier hosts: {}", e);
             return records;
         }
     };
@@ -23,34 +28,33 @@ pub fn read_host() -> Records {
     for line in reader.lines() {
         match line {
             Ok(l) => {
-                let parts: Vec<&str> = l.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    let dns_name = parts[0].to_string();
-                    let targets = vec![parts[1].to_string()];
-                    let record_type: RecordType = RecordType::A;
-                    let set_identifier: Option<String> = Option::None;
-                    let record_t_t_l: Option<TTL> = Option::None;
-                    let labels: Option<Labels> = Option::None;
-                    let provider_specific: Option<ProviderSpecific>=Option::None;
-                    records.push(Endpoint { dns_name, targets, record_type, set_identifier, record_t_t_l, labels, provider_specific });
+                if let Some(parts) = RE.captures(&l) {
+                    // Extraction et conversion des captures en String
+                    let name = parts.name("name").unwrap().as_str().to_string();
+                    let address = parts.name("address").unwrap().as_str().to_string();
+
+                    // Ajout de l'adresse dans le vecteur correspondant à la clé 'name'
+                    records.entry(name)
+                        .or_insert_with(HashSet::new)
+                        .insert(address);
+                } else {
+                    info!("Skip host line: {l}");
                 }
             }
             Err(e) => {
-                eprintln!("Erreur lors de la lecture du fichier hosts: {}", e);
+                error!("Erreur lors de la lecture du fichier hosts: {}", e);
             }
         }
     }
-
     records
 }
 
-pub fn write_host(records: &Records) -> std::io::Result<()> {
+pub fn write_host(records: &HashMap<String,HashSet<String>>) -> std::io::Result<()> {
     // Ouvre le fichier hosts en lecture
     let mut file = std::fs::OpenOptions::new().write(true).create(true).open(&CONFIG.host_file_path)?;
-    for record in records {
-        for ip in &record.targets {
-            let entry = format!("{ip} {}\n", record.dns_name);
-            file.write_all(entry.as_bytes())?;
+    for (name, ips)  in records {
+        for ip in ips {
+            file.write_all(format!("{ip} {name}\n").as_bytes())?;
         }
     }
     file.flush()?;

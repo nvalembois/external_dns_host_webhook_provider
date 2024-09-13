@@ -2,7 +2,7 @@ use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use core::str;
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::{HashMap, HashSet}, fmt::Debug};
 
 use crate::hosts::{read_host, write_host};
 
@@ -82,29 +82,26 @@ pub async fn post_records(req: &mut Request, res: &mut Response) {
         }
     };
 
-    // Chemin vers le fichier hosts
-    let records = read_host();
-    let mut result = Records::new();
-    let mut changed = false;
-
-    // Parcours des enregistrements DNS
-    'new_records: for new_record in &new_records {
-        for record in &records {
-            if record.dns_name == new_record.dns_name {
-                changed = true;
-                result.push(new_record.clone());
-                continue 'new_records;
-            } else {
-                result.push(record.clone());
-            }
+    let mut records = read_host();
+    let mut result: HashMap<String, HashSet<String>> = HashMap::new();
+    // Transformation en records pour écrire dans hosts
+    for new_record in &new_records {
+        let ips: HashSet<String> = new_record.targets.clone().into_iter().collect();
+        records.entry(new_record.dns_name.clone())
+            .and_modify(|e| e.retain(|ip| !ips.contains(ip)));
+        if result.contains_key(&new_record.dns_name[..]) {
+            result.entry(new_record.dns_name.clone())
+                .and_modify(|e| e.extend(ips));
+        } else {
+            result.entry(new_record.dns_name.clone())
+                .or_insert_with(|| ips);
         }
     }
-
-    if ! changed { 
-        res.status_code(StatusCode::OK);
-        res.render(Text::Plain("Nothing to do"));
-        return;
-    }
+    // if ! changed { 
+    //     res.status_code(StatusCode::OK);
+    //     res.render(Text::Plain("Nothing to do"));
+    //     return;
+    // }
     match write_host(&result) {
         Ok(_) => {
             res.status_code(StatusCode::OK);
@@ -131,11 +128,21 @@ pub async fn post_adjustendpoints(req: &mut Request, res: &mut Response) {
         }
     };
 
-    for e in &records {
-        info!("-- endpoint dns_name={}, targets={}, type={:?}", e.dns_name, e.targets.join(","), e.record_type);
+    let mut result: HashMap<String, HashSet<String>> = HashMap::new();
+    // Transformation en records pour écrire dans hosts
+    for record in &records {
+        info!("-- endpoint dns_name={}, targets={}, type={:?}", record.dns_name, record.targets.join(","), record.record_type);
+        let ips: HashSet<String> = record.targets.clone().into_iter().collect();
+        if result.contains_key(&record.dns_name[..]) {
+            result.entry(record.dns_name.clone())
+                .and_modify(|e| e.extend(ips));
+        } else {
+            result.entry(record.dns_name.clone())
+                .or_insert_with(|| ips);
+        }
     }
-    
-    match write_host(&records) {
+
+    match write_host(&result) {
         Err(e) => {
             info!("Failed to write hosts: {:?}", e);
             res.render(Text::Plain(e.to_string()));
