@@ -13,6 +13,11 @@ pub struct Config {
     pub dry_run: bool,
 
     #[arg(
+        long, short,
+        default_value_t = false)]
+    pub debug: bool,
+
+    #[arg(
         long,
         value_name = "HOST_FILE_PATH",
         env = "HOST_FILE_PATH",

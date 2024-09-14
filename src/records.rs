@@ -1,10 +1,10 @@
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{debug, info};
 use core::str;
 use std::{collections::{HashMap, HashSet}, f64::consts::E, fmt::Debug};
 
-use crate::hosts::{read_host, write_host};
+use crate::{config::CONFIG, hosts::{read_host, write_host}};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum RecordType {
@@ -56,6 +56,21 @@ pub async fn get_records(res: &mut Response) {
     // Variable à retourner
     let mut entrypoints: Vec<Endpoint> = Vec::new();
     for (name, ips) in read_host() {
+        if CONFIG.debug {
+            let mut msg = String::from("return record: ");
+            msg += &name.clone();
+            msg += " ";
+            let mut first = true;
+            for ip in &ips {
+                if first { 
+                    first = false; 
+                } else {
+                    msg += ",";
+                }
+                msg += &ip.clone();
+            }
+            debug!(msg);
+        }
         entrypoints.push(Endpoint {
             dns_name: name.clone(),
             record_type: RecordType::A,
