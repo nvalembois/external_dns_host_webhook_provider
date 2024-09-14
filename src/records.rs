@@ -2,7 +2,7 @@ use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 use core::str;
-use std::{collections::{HashMap, HashSet}, thread::current};
+use std::collections::{HashMap, HashSet};
 
 use crate::{config::CONFIG, hosts::{read_host, write_host}};
 
