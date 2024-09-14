@@ -4,7 +4,7 @@ use host_webhook_provider::records::{get_records, post_adjustendpoints, post_rec
 use salvo::logging::Logger;
 use salvo::server::ServerHandle;
 use salvo::prelude::*;
-use tokio::signal;
+use tokio::{signal, task};
 use futures::future::join_all;
 use std::time::Duration;
 use tracing::{debug, error, info};
@@ -99,8 +99,13 @@ async fn main() {
     handles.push(server_health.handle());
     tokio::spawn(listen_shutdown_signal(handles));
 
-    server_webhook.serve(service_webhook).await;
-    server_health.serve(service_health).await;
+    let mut tasks = vec![];
+    tasks.push(task::spawn(async move {server_webhook.serve(service_webhook).await;}));
+    tasks.push(task::spawn(async move {server_health.serve(service_health).await;}));
+
+    for task in tasks {
+        task.await.unwrap();
+    }
 }
 
 async fn listen_shutdown_signal(handles: Vec<ServerHandle>) {
