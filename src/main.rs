@@ -11,18 +11,6 @@ use tracing::{debug, error, info};
 
 #[handler]
 async fn get_root(req: &mut Request, res: &mut Response) {
-    // Return error if Accept header has no value
-    // Keep it's value to override Content-Type
-    let accept_header_value: String = match req.header("Accept") {
-        Option::Some(v) => { v }
-        Option::None => {
-            res.status_code(StatusCode::BAD_REQUEST);
-            res.render(Text::Plain("Missing header Accept"));
-            return;
-        }
-    };
-
-    // 
     let domain_filter = CONFIG.domain_filter.clone();
     match serde_json::to_string(&domain_filter) {
         Ok(v) => {
@@ -36,11 +24,14 @@ async fn get_root(req: &mut Request, res: &mut Response) {
         }
     }
     
-    // Override Content-Type Header with received Accept header value
-    if let Err(err) = res.add_header("Content-Type", accept_header_value, true) {
-        res.status_code(StatusCode::BAD_REQUEST);
-        res.render(Text::Plain(format!("Failed to add header Content-Type: {}",err.to_string())));
-        return;
+    // Set Content-Type Header with Accept Header
+    if let Some(accept_header_value) = req.header("Accept") {
+        let accept_header_value: String = v;
+        if let Err(err) = res.add_header("Content-Type", accept_header_value, true) {
+            res.status_code(StatusCode::BAD_REQUEST);
+            res.render(Text::Plain(format!("Failed to add header Content-Type: {}",err.to_string())));
+            return;
+        };
     };
 }
 

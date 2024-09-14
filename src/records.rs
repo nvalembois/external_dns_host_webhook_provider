@@ -2,7 +2,7 @@ use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 use core::str;
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, thread::current};
 
 use crate::{config::CONFIG, hosts::{read_host, write_host}};
 
@@ -92,8 +92,19 @@ pub async fn get_records(res: &mut Response) {
             eprintln!("Erreur lors de la conversion en JSON: {}", e);
             res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
             res.render(Text::Plain("Erreur lors de la conversion en JSON"));
+            return;
         }
     }
+
+    // Set Content-Type Header with Accept Header
+    if let Some(accept_header_value) = req.header("Accept") {
+        let accept_header_value: String = v;
+        if let Err(err) = res.add_header("Content-Type", accept_header_value, true) {
+            res.status_code(StatusCode::BAD_REQUEST);
+            res.render(Text::Plain(format!("Failed to add header Content-Type: {}",err.to_string())));
+            return;
+        };
+    };
 }
 
 #[handler]
@@ -137,8 +148,19 @@ pub async fn post_records(req: &mut Request, res: &mut Response) {
             eprintln!("Erreur lors de l'ecriture du fichier hosts: {}", e);
             res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
             res.render(Text::Plain("Erreur lors de l'écriture du fichier hosts"));
+            return;
         }
     }
+    
+    // Set Content-Type Header with Accept Header
+    if let Some(accept_header_value) = req.header("Accept") {
+        let accept_header_value: String = v;
+        if let Err(err) = res.add_header("Content-Type", accept_header_value, true) {
+            res.status_code(StatusCode::BAD_REQUEST);
+            res.render(Text::Plain(format!("Failed to add header Content-Type: {}",err.to_string())));
+            return;
+        };
+    };
 }
 
 
@@ -154,7 +176,12 @@ pub async fn post_adjustendpoints(req: &mut Request, res: &mut Response) {
         }
     };
 
+    let current_records = read_host();
+
     for record in &mut records {
+        if current_records.contains_key(&record.dns_name) {
+            record.targets.retain(|ip| !current_records.ips.contains(ip));
+        }
         record.set_identifier = None;
         record.record_t_t_l = None;
         record.labels = None;
@@ -170,6 +197,17 @@ pub async fn post_adjustendpoints(req: &mut Request, res: &mut Response) {
             eprintln!("Erreur lors de la conversion en JSON: {}", e);
             res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
             res.render(Text::Plain("Erreur lors de la conversion en JSON"));
+            return;
         }
     }
+
+    // Set Content-Type Header with Accept Header
+    if let Some(accept_header_value) = req.header("Accept") {
+        let accept_header_value: String = v;
+        if let Err(err) = res.add_header("Content-Type", accept_header_value, true) {
+            res.status_code(StatusCode::BAD_REQUEST);
+            res.render(Text::Plain(format!("Failed to add header Content-Type: {}",err.to_string())));
+            return;
+        };
+    };
 }
