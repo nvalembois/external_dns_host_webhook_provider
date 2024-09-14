@@ -2,7 +2,7 @@ use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use core::str;
-use std::{collections::{HashMap, HashSet}, fmt::Debug};
+use std::{collections::{HashMap, HashSet}, f64::consts::E, fmt::Debug};
 
 use crate::hosts::{read_host, write_host};
 
@@ -53,11 +53,22 @@ pub type Records = Vec<Endpoint>;
 
 #[handler]
 pub async fn get_records(res: &mut Response) {
-    // Lit le fichier hosts
-    let records = read_host();
+    // Variable à retourner
+    let mut entrypoints: Vec<Endpoint> = Vec::new();
+    for (name, ips) in read_host() {
+        entrypoints.push(Endpoint {
+            dns_name: name.clone(),
+            record_type: RecordType::A,
+            targets: ips.into_iter().collect(),
+            set_identifier: None,
+            record_t_t_l: None,
+            labels: None,
+            provider_specific: None
+        })
+    }
 
     // Convertit les enregistrements en JSON et les envoie dans la réponse
-    match serde_json::to_string(&records) {
+    match serde_json::to_string(&entrypoints) {
         Ok(json) => {
             res.status_code(StatusCode::OK);
             res.render(Text::Json(json));

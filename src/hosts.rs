@@ -51,7 +51,11 @@ pub fn read_host() -> HashMap<String,HashSet<String>> {
 
 pub fn write_host(records: &HashMap<String,HashSet<String>>) -> std::io::Result<()> {
     // Ouvre le fichier hosts en lecture
-    let mut file = std::fs::OpenOptions::new().write(true).create(true).open(&CONFIG.host_file_path)?;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open(&CONFIG.host_file_path)?;
+    
     for (name, ips)  in records {
         for ip in ips {
             file.write_all(format!("{ip} {name}\n").as_bytes())?;
