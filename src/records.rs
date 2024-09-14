@@ -175,7 +175,11 @@ pub async fn post_adjustendpoints(req: &mut Request, res: &mut Response) {
             return;
         }
     };
-
+    if CONFIG.debug {
+        for r in &records {
+            debug!("in record: {:?}", r);
+        }
+    }
     let current_records = read_host();
 
     for record in &mut records {
@@ -188,6 +192,12 @@ pub async fn post_adjustendpoints(req: &mut Request, res: &mut Response) {
         record.provider_specific = None;
     }
 
+    if CONFIG.debug {
+        for r in &records {
+            debug!("out record: {:?}", r);
+        }
+    }
+    
     match serde_json::to_string(&records) {
         Ok(json) => {
             res.status_code(StatusCode::OK);
