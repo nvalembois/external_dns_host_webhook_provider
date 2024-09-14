@@ -1,9 +1,11 @@
 use host_webhook_provider::config::CONFIG;
+use host_webhook_provider::health::health_server;
 use host_webhook_provider::records::{get_records, post_adjustendpoints, post_records};
 use salvo::logging::Logger;
 use salvo::server::ServerHandle;
 use salvo::prelude::*;
 use tokio::signal;
+use futures::future::join_all;
 use std::time::Duration;
 use tracing::{debug, error, info};
 
@@ -85,13 +87,14 @@ async fn main() {
     let acceptor = TcpListener::new(&CONFIG.listen_addr)
         .bind().await;
     let server = Server::new(acceptor);
-    let handle = server.handle();
-    // Listen Shutdown Signal
-    tokio::spawn(listen_shutdown_signal(handle));
+    let mut handles: Vec<ServerHandle> = Vec::new();
+    handles.push(server.handle());
     server.serve(service).await;
+    handles.push(health_server());
+    tokio::spawn(listen_shutdown_signal(handles));
 }
 
-async fn listen_shutdown_signal(handle: ServerHandle) {
+async fn listen_shutdown_signal(handles: Vec<ServerHandle>) {
     // Wait Shutdown Signal
     let ctrl_c = async {
         signal::ctrl_c()
@@ -120,6 +123,10 @@ async fn listen_shutdown_signal(handle: ServerHandle) {
         _ = terminate => println!("terminate signal received"),
     };
 
-    // Graceful Shutdown Server
-    handle.stop_graceful(Duration::from_secs(60*5));
+    async fn async_stop(handle: &ServerHandle) {
+        handle.stop_graceful(Duration::from_secs(60*5));
+    }
+
+    let tasks: Vec<_> = handles.iter().map(|h| async_stop(h)).collect();
+    _ = join_all(tasks).await;
 }

@@ -30,7 +30,14 @@ pub struct Config {
         env = "LISTEN_ADDR",
         default_value_t = String::from("127.0.0.1:8888"))]
     pub listen_addr: String,
-    
+
+    #[arg(
+        long,
+        value_name = "HEALTH_LISTEN_ADDR",
+        env = "HEALTH_LISTEN_ADDR",
+        default_value_t = String::from("0.0.0.0:8080"))]
+    pub health_listen_addr: String,
+
     #[command(flatten)]
     pub domain_filter: DomainFilter,
 }
