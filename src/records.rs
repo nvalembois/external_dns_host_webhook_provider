@@ -129,7 +129,7 @@ pub async fn post_records(req: &mut Request, res: &mut Response) {
 
 #[handler]
 pub async fn post_adjustendpoints(req: &mut Request, res: &mut Response) {
-    let records: Records = match req.parse_json().await {
+    let mut records: Records = match req.parse_json().await {
         Ok(records) => records,
         Err(e) => {
             info!("Impossible de lire le corps de la requête en tant que texte UTF-8 : {}.", e);
@@ -139,28 +139,11 @@ pub async fn post_adjustendpoints(req: &mut Request, res: &mut Response) {
         }
     };
 
-    let mut result: HashMap<String, HashSet<String>> = HashMap::new();
-    // Transformation en records pour écrire dans hosts
-    for record in &records {
-        info!("-- endpoint dns_name={}, targets={}, type={:?}", record.dns_name, record.targets.join(","), record.record_type);
-        let ips: HashSet<String> = record.targets.clone().into_iter().collect();
-        if result.contains_key(&record.dns_name[..]) {
-            result.entry(record.dns_name.clone())
-                .and_modify(|e| e.extend(ips));
-        } else {
-            result.entry(record.dns_name.clone())
-                .or_insert_with(|| ips);
-        }
-    }
-
-    match write_host(&result) {
-        Err(e) => {
-            info!("Failed to write hosts: {:?}", e);
-            res.render(Text::Plain(e.to_string()));
-            res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
-            return;
-        }
-        _ => {}
+    for record in &mut records {
+        record.set_identifier = None;
+        record.record_t_t_l = None;
+        record.labels = None;
+        record.provider_specific = None;
     }
 
     match serde_json::to_string(&records) {
