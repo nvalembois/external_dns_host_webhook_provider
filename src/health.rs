@@ -2,12 +2,13 @@ use crate::config::CONFIG;
 use salvo::logging::Logger;
 use salvo::server::ServerHandle;
 use salvo::prelude::*;
-use tokio::signal;
-use std::time::Duration;
 use tracing::{debug, error, info};
 
 #[handler]
 async fn get_healthz(res: &mut Response) {
+    if CONFIG.debug {
+        debug!("get_health");
+    }
     res.render(Text::Plain("Ok!"));
     res.status_code(StatusCode::OK);
 }
