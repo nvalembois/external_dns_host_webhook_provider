@@ -14,4 +14,4 @@ FROM docker.io/library/alpine:3.20.3
 COPY --from=build /tmp/target/release/host_webhook_provider /
 
 USER 10000
-CMD [ "/host_webhook_provider" ]
+ENTRYPOINT [ "/host_webhook_provider" ]

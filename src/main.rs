@@ -15,25 +15,23 @@ async fn get_healthz(res: &mut Response) {
 
 #[handler]
 async fn get_root(req: &mut Request, res: &mut Response) {
-    let value: String = match req.header("Accept") {
-        Option::Some(value) => { value }
+    // Return error if Accept header has no value
+    // Keep it's value to override Content-Type
+    let accept_header_value: String = match req.header("Accept") {
+        Option::Some(v) => { v }
         Option::None => {
             res.status_code(StatusCode::BAD_REQUEST);
             res.render(Text::Plain("Missing header Accept"));
             return;
         }
     };
-    if let Err(err) = res.add_header("Content-Type", value, true) {
-        res.status_code(StatusCode::BAD_REQUEST);
-        res.render(Text::Plain(format!("Failed to add header Content-Type: {}",err.to_string())));
-        return;
-    };
 
+    // 
     let domain_filter = CONFIG.domain_filter.clone();
     match serde_json::to_string(&domain_filter) {
-        Ok(json) => {
+        Ok(v) => {
             res.status_code(StatusCode::OK);
-            res.render(Text::Json(json));
+            res.render(Text::Json(v));
         }
         Err(e) => {
             error!("Erreur lors de la conversion en JSON: {}", e);
@@ -42,13 +40,19 @@ async fn get_root(req: &mut Request, res: &mut Response) {
         }
     }
     
+    // Override Content-Type Header with received Accept header value
+    if let Err(err) = res.add_header("Content-Type", accept_header_value, true) {
+        res.status_code(StatusCode::BAD_REQUEST);
+        res.render(Text::Plain(format!("Failed to add header Content-Type: {}",err.to_string())));
+        return;
+    };
 }
 
 #[handler]
 async fn alter_content_type(req: &mut Request) {
-    if let Some(value) = req.header("Content-Type") {
-        let value: String = value;
-        if value == "application/external.dns.webhook+json;version=1" {
+    if let Some(v) = req.header("Content-Type") {
+        let content_type: String = v;
+        if content_type == "application/external.dns.webhook+json;version=1" {
             if let Err(e) = req.add_header("Content-Type", "application/json;version=1", true) {
                 info!("Failed to replace Content-Type: {:?}", e);
             }
