@@ -8,6 +8,16 @@
     "schedule": ["before 1am"],
     "prCreation": "immediate",
     "automerge": true,
-    "prHourlyLimit": 15
+    "prHourlyLimit": 15,
+    "packageRules": [
+      {
+        "matchDatasources": ["github-tags", "github-runners"],
+        "groupName": "githubCi"
+      },
+      {
+        "matchManagers": [ "cargo" ],
+        "groupName": "rust"
+      }
+    ]
   }
   
