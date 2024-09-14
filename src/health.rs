@@ -1,28 +1,10 @@
-use crate::config::CONFIG;
-use salvo::logging::Logger;
-use salvo::server::ServerHandle;
 use salvo::prelude::*;
-use tracing::{debug, error, info};
+use tracing::debug;
 
 #[handler]
-async fn get_healthz(res: &mut Response) {
-    if CONFIG.debug {
-        debug!("get_health");
-    }
+pub async fn get_healthz(res: &mut Response) {
+    debug!("get_health");
     res.render(Text::Plain("Ok!"));
     res.status_code(StatusCode::OK);
 }
 
-#[tokio::main]
-pub async fn health_server() -> ServerHandle{
-    let router = Router::new()
-        .push(Router::with_path("healthz").get(get_healthz));
-    let service = Service::new(router)
-        .hoop(Logger::new());
-    let acceptor = TcpListener::new(&CONFIG.health_listen_addr)
-        .bind().await;
-    let server = Server::new(acceptor);
-    let handle = server.handle();
-    server.serve(service).await;
-    handle
-}

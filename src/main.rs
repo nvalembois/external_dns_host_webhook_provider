@@ -1,5 +1,5 @@
 use host_webhook_provider::config::CONFIG;
-use host_webhook_provider::health::health_server;
+use host_webhook_provider::health::get_healthz;
 use host_webhook_provider::records::{get_records, post_adjustendpoints, post_records};
 use salvo::logging::Logger;
 use salvo::server::ServerHandle;
@@ -63,6 +63,7 @@ async fn main() {
     tracing_subscriber::fmt()
         .with_max_level(if CONFIG.debug {tracing::Level::DEBUG} else { tracing::Level::INFO} )
         .init();
+
     info!("Config: filters={}", &CONFIG.domain_filter.filters.join(","));
     info!("Config: exclude={}", &CONFIG.domain_filter.exclude.join(","));
     info!("Config: regex={}", &CONFIG.domain_filter.regex);
@@ -73,21 +74,33 @@ async fn main() {
     info!("Config: dry_run={}", &CONFIG.dry_run);
     info!("Config: debug={}", &CONFIG.debug);
 
-    let router = Router::new()
+
+    let router_webhook = Router::new()
         .hoop(alter_content_type)
         .get(get_root)
         .push(Router::with_path("records").get(get_records).post(post_records))
         .push(Router::with_path("adjustendpoints").post(post_adjustendpoints));
-    let service = Service::new(router)
+    let service_webhook = Service::new(router_webhook)
         .hoop(Logger::new());
-    let acceptor = TcpListener::new(&CONFIG.listen_addr)
+    let acceptor_webhook = TcpListener::new(&CONFIG.listen_addr)
         .bind().await;
-    let server = Server::new(acceptor);
+    let server_webhook = Server::new(acceptor_webhook);
+    
+    let router_health = Router::new()
+        .push(Router::with_path("healthz").get(get_healthz));
+    let service_health = Service::new(router_health)
+        .hoop(Logger::new());
+    let acceptor_health = TcpListener::new(&CONFIG.health_listen_addr)
+        .bind().await;
+    let server_health = Server::new(acceptor_health);
+
     let mut handles: Vec<ServerHandle> = Vec::new();
-    handles.push(server.handle());
-    server.serve(service).await;
-    handles.push(health_server());
+    handles.push(server_webhook.handle());
+    handles.push(server_health.handle());
     tokio::spawn(listen_shutdown_signal(handles));
+
+    server_webhook.serve(service_webhook).await;
+    server_health.serve(service_health).await;
 }
 
 async fn listen_shutdown_signal(handles: Vec<ServerHandle>) {
