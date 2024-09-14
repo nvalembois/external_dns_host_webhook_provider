@@ -74,7 +74,7 @@ async fn main() {
     info!("Config: dry_run={}", &CONFIG.dry_run);
     info!("Config: debug={}", &CONFIG.debug);
 
-
+    // webhook
     let router_webhook = Router::new()
         .hoop(alter_content_type)
         .get(get_root)
@@ -86,26 +86,25 @@ async fn main() {
         .bind().await;
     let server_webhook = Server::new(acceptor_webhook);
     
+    // health
     let router_health = Router::new()
         .push(Router::with_path("healthz").get(get_healthz));
-    let service_health = Service::new(router_health)
-        .hoop(Logger::new());
+    let service_health = Service::new(router_health);
     let acceptor_health = TcpListener::new(&CONFIG.health_listen_addr)
         .bind().await;
     let server_health = Server::new(acceptor_health);
 
+    // handle shutdown
     let mut handles: Vec<ServerHandle> = Vec::new();
     handles.push(server_webhook.handle());
     handles.push(server_health.handle());
     tokio::spawn(listen_shutdown_signal(handles));
 
-    let mut tasks = vec![];
-    tasks.push(task::spawn(async move {server_webhook.serve(service_webhook).await;}));
-    tasks.push(task::spawn(async move {server_health.serve(service_health).await;}));
-
-    for task in tasks {
-        task.await.unwrap();
-    }
+    // start servers
+    let task_webhook = task::spawn(async move {server_webhook.serve(service_webhook).await;});
+    let task_health = task::spawn(async move {server_health.serve(service_health).await;});
+    task_webhook.await.unwrap();
+    task_health.await.unwrap();
 }
 
 async fn listen_shutdown_signal(handles: Vec<ServerHandle>) {
