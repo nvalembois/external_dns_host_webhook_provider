@@ -52,7 +52,7 @@ pub struct Endpoint {
 pub type Records = Vec<Endpoint>;
 
 #[handler]
-pub async fn get_records(res: &mut Response) {
+pub async fn get_records(req: &mut Request, res: &mut Response) {
     // Variable à retourner
     let mut entrypoints: Vec<Endpoint> = Vec::new();
     for (name, ips) in read_host() {
@@ -97,7 +97,7 @@ pub async fn get_records(res: &mut Response) {
     }
 
     // Set Content-Type Header with Accept Header
-    if let Some(accept_header_value) = req.header("Accept") {
+    if let Some(v) = req.header("Accept") {
         let accept_header_value: String = v;
         if let Err(err) = res.add_header("Content-Type", accept_header_value, true) {
             res.status_code(StatusCode::BAD_REQUEST);
@@ -153,7 +153,7 @@ pub async fn post_records(req: &mut Request, res: &mut Response) {
     }
     
     // Set Content-Type Header with Accept Header
-    if let Some(accept_header_value) = req.header("Accept") {
+    if let Some(v) = req.header("Accept") {
         let accept_header_value: String = v;
         if let Err(err) = res.add_header("Content-Type", accept_header_value, true) {
             res.status_code(StatusCode::BAD_REQUEST);
@@ -179,8 +179,8 @@ pub async fn post_adjustendpoints(req: &mut Request, res: &mut Response) {
     let current_records = read_host();
 
     for record in &mut records {
-        if current_records.contains_key(&record.dns_name) {
-            record.targets.retain(|ip| !current_records.ips.contains(ip));
+        if let Some(r) = current_records.get(&record.dns_name) {
+            record.targets.retain(|ip| !r.contains(ip));
         }
         record.set_identifier = None;
         record.record_t_t_l = None;
@@ -202,7 +202,7 @@ pub async fn post_adjustendpoints(req: &mut Request, res: &mut Response) {
     }
 
     // Set Content-Type Header with Accept Header
-    if let Some(accept_header_value) = req.header("Accept") {
+    if let Some(v) = req.header("Accept") {
         let accept_header_value: String = v;
         if let Err(err) = res.add_header("Content-Type", accept_header_value, true) {
             res.status_code(StatusCode::BAD_REQUEST);

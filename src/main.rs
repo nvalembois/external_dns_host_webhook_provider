@@ -25,7 +25,7 @@ async fn get_root(req: &mut Request, res: &mut Response) {
     }
     
     // Set Content-Type Header with Accept Header
-    if let Some(accept_header_value) = req.header("Accept") {
+    if let Some(v) = req.header("Accept") {
         let accept_header_value: String = v;
         if let Err(err) = res.add_header("Content-Type", accept_header_value, true) {
             res.status_code(StatusCode::BAD_REQUEST);
