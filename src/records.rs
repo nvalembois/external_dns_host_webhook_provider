@@ -1,6 +1,6 @@
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
-use tracing::debug;
+use tracing::{debug, warn};
 use core::str;
 use std::collections::HashMap;
 
@@ -125,7 +125,15 @@ pub async fn post_records(req: &mut Request, res: &mut Response) {
     // Récupérer le corps de la requête en tant que JSON
     let changes: Changes = match req.parse_json().await {
         Ok(records) => records,
-        Err(_) => {
+        Err(e) => {
+            warn!("ParseError: {e}");
+            match req.payload().await {
+                Ok(b) => { match str::from_utf8(b) {
+                        Ok(s) => {warn!("body: {s}");}
+                        Err(e) => {warn!("body_from_utf8 err: {e}");}
+                    }}
+                Err(e) => {warn!("get body {e}");}
+            };
             res.status_code(StatusCode::BAD_REQUEST);
             res.render(Text::Plain("Invalid JSON input"));
             return;
