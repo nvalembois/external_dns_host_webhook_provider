@@ -49,6 +49,19 @@ pub struct Endpoint {
 	pub provider_specific: Option<ProviderSpecific>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all(serialize = "snake_case", deserialize = "camelCase"))]
+pub struct Changes {
+	// Records that need to be created
+	pub Create: Records,
+	// Records that need to be updated (current data)
+	UpdateOld: Records,
+	// Records that need to be updated (desired data)
+	UpdateNew: Records,
+	// Records that need to be deleted
+	Delete: Records,
+}
+
 pub type Records = Vec<Endpoint>;
 
 #[handler]
@@ -110,7 +123,7 @@ pub async fn get_records(req: &mut Request, res: &mut Response) {
 #[handler]
 pub async fn post_records(req: &mut Request, res: &mut Response) {
     // Récupérer le corps de la requête en tant que JSON
-    let new_records: Records = match req.parse_json().await {
+    let changes: Changes = match req.parse_json().await {
         Ok(records) => records,
         Err(_) => {
             res.status_code(StatusCode::BAD_REQUEST);
@@ -118,39 +131,35 @@ pub async fn post_records(req: &mut Request, res: &mut Response) {
             return;
         }
     };
+    if CONFIG.debug {
+        for r in &changes.Create {
+            debug!("in create record: {:?}", r);
+        }
+        for r in &changes.Delete {
+            debug!("in delete record: {:?}", r);
+        }
+        for r in &changes.UpdateNew {
+            debug!("in update new record: {:?}", r);
+        }
+        for r in &changes.UpdateOld {
+            debug!("in update old record: {:?}", r);
+        }
+    }
 
-    let mut records = read_host();
-    let mut result: HashMap<String, HashSet<String>> = HashMap::new();
-    // Transformation en records pour écrire dans hosts
-    for new_record in &new_records {
-        let ips: HashSet<String> = new_record.targets.clone().into_iter().collect();
-        records.entry(new_record.dns_name.clone())
-            .and_modify(|e| e.retain(|ip| !ips.contains(ip)));
-        if result.contains_key(&new_record.dns_name[..]) {
-            result.entry(new_record.dns_name.clone())
-                .and_modify(|e| e.extend(ips));
-        } else {
-            result.entry(new_record.dns_name.clone())
-                .or_insert_with(|| ips);
-        }
-    }
-    // if ! changed { 
-    //     res.status_code(StatusCode::OK);
-    //     res.render(Text::Plain("Nothing to do"));
-    //     return;
+    // if !CONFIG.dry_run {
+    //     // match write_host(&result) {
+    //     //     Ok(_) => {
+    //     //         res.status_code(StatusCode::OK);
+    //     //         res.render(Text::Plain("success"));
+    //     //     }
+    //     //     Err(e) => {
+    //     //         eprintln!("Erreur lors de l'ecriture du fichier hosts: {}", e);
+    //     //         res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
+    //     //         res.render(Text::Plain("Erreur lors de l'écriture du fichier hosts"));
+    //     //         return;
+    //     //     }
+    //     // }
     // }
-    match write_host(&result) {
-        Ok(_) => {
-            res.status_code(StatusCode::OK);
-            res.render(Text::Plain("success"));
-        }
-        Err(e) => {
-            eprintln!("Erreur lors de l'ecriture du fichier hosts: {}", e);
-            res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
-            res.render(Text::Plain("Erreur lors de l'écriture du fichier hosts"));
-            return;
-        }
-    }
     
     // Set Content-Type Header with Accept Header
     if let Some(v) = req.header("Accept") {
