@@ -53,13 +53,13 @@ pub struct Endpoint {
 #[serde(rename_all(serialize = "snake_case", deserialize = "camelCase"))]
 pub struct Changes {
 	// Records that need to be created
-	pub create: Records,
+	pub create: Vec<Endpoint>,
 	// Records that need to be updated (current data)
-	pub update_old: Records,
+	pub update_old: Vec<Endpoint>,
 	// Records that need to be updated (desired data)
-	pub update_new: Records,
+	pub update_new: Vec<Endpoint>,
 	// Records that need to be deleted
-	pub delete: Records,
+	pub delete: Vec<Endpoint>,
 }
 
 pub type Records = Vec<Endpoint>;
