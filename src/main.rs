@@ -12,6 +12,8 @@ use tracing::{debug, error, info};
 #[handler]
 async fn get_root(req: &mut Request, res: &mut Response) {
     let domain_filter = CONFIG.domain_filter.clone();
+    debug!("domain_filter: {:?}", &domain_filter);
+
     match serde_json::to_string(&domain_filter) {
         Ok(v) => {
             res.status_code(StatusCode::OK);
@@ -23,7 +25,7 @@ async fn get_root(req: &mut Request, res: &mut Response) {
             res.render(Text::Plain("Erreur lors de la conversion en JSON"));
         }
     }
-    
+
     // Set Content-Type Header with Accept Header
     if let Some(v) = req.header("Accept") {
         let accept_header_value: String = v;
