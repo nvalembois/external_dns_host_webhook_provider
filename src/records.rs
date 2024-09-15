@@ -1,6 +1,6 @@
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 use core::str;
 use std::collections::HashMap;
 
