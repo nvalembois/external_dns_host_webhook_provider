@@ -140,17 +140,17 @@ pub async fn post_records(req: &mut Request, res: &mut Response) {
         }
     };
     if CONFIG.debug {
-        for r in &changes.create {
-            debug!("in create record: {:?}", r);
+        if let Some(r) = &changes.create {
+            debug!("in create records: {:?}", r);
         }
-        for r in &changes.delete {
-            debug!("in delete record: {:?}", r);
+        if let Some(r) = &changes.delete {
+            debug!("in delete records: {:?}", r);
         }
-        for r in &changes.update_new {
-            debug!("in update new record: {:?}", r);
+        if let Some(r) = &changes.update_new {
+            debug!("in update new records: {:?}", r);
         }
-        for r in &changes.update_old {
-            debug!("in update old record: {:?}", r);
+        if let Some(r) = &changes.update_old {
+            debug!("in update old records: {:?}", r);
         }
     }
 
@@ -178,6 +178,7 @@ pub async fn post_records(req: &mut Request, res: &mut Response) {
             return;
         };
     };
+    res.status_code(StatusCode::NO_CONTENT);
 }
 
 
