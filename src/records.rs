@@ -184,57 +184,57 @@ pub async fn post_records(req: &mut Request, res: &mut Response) {
 
 #[handler]
 pub async fn post_adjustendpoints(req: &mut Request, res: &mut Response) {
-    // let mut records: Records = match req.parse_json().await {
-    //     Ok(records) => records,
-    //     Err(e) => {
-    //         info!("Impossible de lire le corps de la requête en tant que texte UTF-8 : {}.", e);
-    //         res.render(Text::Plain(e.to_string()));
-    //         res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
-    //         return;
-    //     }
-    // };
-    // if CONFIG.debug {
-    //     for r in &records {
-    //         debug!("in record: {:?}", r);
-    //     }
-    // }
-
-    // for record in &mut records {
-    //     record.set_identifier = None;
-    //     record.record_t_t_l = None;
-    //     record.labels = None;
-    //     record.provider_specific = None;
-    // }
-
-    // if CONFIG.debug {
-    //     for r in &records {
-    //         debug!("out record: {:?}", r);
-    //     }
-    // }
-
-    // match serde_json::to_string(&records) {
-    //     Ok(json) => {
-    //         res.status_code(StatusCode::OK);
-    //         res.render(Text::Json(json));
-    //     }
-    //     Err(e) => {
-    //         eprintln!("Erreur lors de la conversion en JSON: {}", e);
-    //         res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
-    //         res.render(Text::Plain("Erreur lors de la conversion en JSON"));
-    //         return;
-    //     }
-    // }
-
-    let body = match req.payload().await {
-        Ok(b) => { match str::from_utf8(b) {
-                Ok(s) => s.to_string(),
-                Err(e) => e.to_string(),
-            }}
-        Err(e) => e.to_string(),
+    let mut records: Records = match req.parse_json().await {
+        Ok(records) => records,
+        Err(e) => {
+            info!("Impossible de lire le corps de la requête en tant que texte UTF-8 : {}.", e);
+            res.render(Text::Plain(e.to_string()));
+            res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
+            return;
+        }
     };
-    debug!("set response: {body}");
-    res.render(Text::Plain(body));
-    res.status_code(StatusCode::OK);
+    if CONFIG.debug {
+        for r in &records {
+            debug!("in record: {:?}", r);
+        }
+    }
+
+    for record in &mut records {
+        record.set_identifier = None;
+        record.record_t_t_l = None;
+        record.labels = None;
+        record.provider_specific = None;
+    }
+
+    if CONFIG.debug {
+        for r in &records {
+            debug!("out record: {:?}", r);
+        }
+    }
+
+    match serde_json::to_string(&records) {
+        Ok(json) => {
+            res.status_code(StatusCode::OK);
+            res.render(Text::Json(json));
+        }
+        Err(e) => {
+            eprintln!("Erreur lors de la conversion en JSON: {}", e);
+            res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
+            res.render(Text::Plain("Erreur lors de la conversion en JSON"));
+            return;
+        }
+    }
+
+    // let body = match req.payload().await {
+    //     Ok(b) => { match str::from_utf8(b) {
+    //             Ok(s) => s.to_string(),
+    //             Err(e) => e.to_string(),
+    //         }}
+    //     Err(e) => e.to_string(),
+    // };
+    // debug!("set response: {body}");
+    // res.render(Text::Plain(body));
+    // res.status_code(StatusCode::OK);
 
     // Set Content-Type Header with Accept Header
     if let Some(v) = req.header("Accept") {
