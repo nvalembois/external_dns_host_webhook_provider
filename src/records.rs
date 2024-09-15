@@ -31,7 +31,7 @@ pub type Targets = Vec<String>;
 pub type Labels = HashMap<String,String>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all(serialize = "snake_case", deserialize = "camelCase"))]
+#[serde(rename_all = "camelCase")]
 pub struct Endpoint {
 	// The hostname of the DNS record
 	pub dns_name: String,
@@ -50,16 +50,16 @@ pub struct Endpoint {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all(serialize = "snake_case", deserialize = "camelCase"))]
+#[serde(rename_all = "PascalCase")]
 pub struct Changes {
 	// Records that need to be created
-	pub create: Vec<Endpoint>,
+	pub create: Option<Records>,
 	// Records that need to be updated (current data)
-	pub update_old: Vec<Endpoint>,
+	pub update_old: Option<Records>,
 	// Records that need to be updated (desired data)
-	pub update_new: Vec<Endpoint>,
+	pub update_new: Option<Records>,
 	// Records that need to be deleted
-	pub delete: Vec<Endpoint>,
+	pub delete: Option<Records>,
 }
 
 pub type Records = Vec<Endpoint>;
