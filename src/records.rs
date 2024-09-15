@@ -190,20 +190,12 @@ pub async fn post_adjustendpoints(req: &mut Request, res: &mut Response) {
         }
     }
 
-    let current_records = read_host();
-
     for record in &mut records {
-        if let Some(r) = current_records.get(&record.dns_name) {
-            record.targets.retain(|ip| r.contains(ip));
-        } else {
-            record.targets.clear();
-        }
         record.set_identifier = None;
         record.record_t_t_l = None;
         record.labels = None;
         record.provider_specific = None;
     }
-    records.retain(|e| e.targets.len() > 0 );
 
     if CONFIG.debug {
         for r in &records {
