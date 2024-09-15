@@ -1,11 +1,10 @@
-use futures::stream::Once;
-use salvo::{hyper::body::Buf, prelude::*};
+use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info};
+use tracing::debug;
 use core::str;
-use std::{collections::{HashMap, HashSet}, string::ParseError};
+use std::collections::HashMap;
 
-use crate::{config::CONFIG, hosts::{read_host, write_host}};
+use crate::{config::CONFIG, hosts::read_host};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum RecordType {
@@ -54,13 +53,13 @@ pub struct Endpoint {
 #[serde(rename_all(serialize = "snake_case", deserialize = "camelCase"))]
 pub struct Changes {
 	// Records that need to be created
-	pub Create: Records,
+	pub create: Records,
 	// Records that need to be updated (current data)
-	UpdateOld: Records,
+	pub update_old: Records,
 	// Records that need to be updated (desired data)
-	UpdateNew: Records,
+	pub update_new: Records,
 	// Records that need to be deleted
-	Delete: Records,
+	pub delete: Records,
 }
 
 pub type Records = Vec<Endpoint>;
@@ -133,16 +132,16 @@ pub async fn post_records(req: &mut Request, res: &mut Response) {
         }
     };
     if CONFIG.debug {
-        for r in &changes.Create {
+        for r in &changes.create {
             debug!("in create record: {:?}", r);
         }
-        for r in &changes.Delete {
+        for r in &changes.delete {
             debug!("in delete record: {:?}", r);
         }
-        for r in &changes.UpdateNew {
+        for r in &changes.update_new {
             debug!("in update new record: {:?}", r);
         }
-        for r in &changes.UpdateOld {
+        for r in &changes.update_old {
             debug!("in update old record: {:?}", r);
         }
     }
