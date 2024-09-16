@@ -1,10 +1,10 @@
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use core::str;
 use std::collections::HashMap;
 
-use crate::{config::CONFIG, hosts::read_host};
+use crate::{config::CONFIG, hosts::{read_host, write_host}};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum RecordType {
@@ -154,21 +154,76 @@ pub async fn post_records(req: &mut Request, res: &mut Response) {
         }
     }
 
-    // if !CONFIG.dry_run {
-    //     // match write_host(&result) {
-    //     //     Ok(_) => {
-    //     //         res.status_code(StatusCode::OK);
-    //     //         res.render(Text::Plain("success"));
-    //     //     }
-    //     //     Err(e) => {
-    //     //         eprintln!("Erreur lors de l'ecriture du fichier hosts: {}", e);
-    //     //         res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
-    //     //         res.render(Text::Plain("Erreur lors de l'écriture du fichier hosts"));
-    //     //         return;
-    //     //     }
-    //     // }
-    // }
-    
+    if !CONFIG.dry_run {
+        let mut host_records = read_host();
+        // Add create items to records
+        if let Some(records) = &changes.create {
+            for record in records {
+                if let Some(e) = host_records.insert(
+                                        record.dns_name.clone(),
+                                        record.targets.clone().into_iter().collect()) {
+                    warn!("create replaced: {e:?}");
+                }
+            }
+        }
+        // Remove delete items
+        if let Some(records) = &changes.delete {
+            for record in records {
+                match host_records.remove(&record.dns_name) {
+                    Some(v) => { 
+                        if CONFIG.debug {
+                            let ips: Vec<String> = v.into_iter().collect();
+                            debug!("removed {} -> {}", record.dns_name, ips.join(",")); }}
+                    None => { warn!("delete {} isn't in hosts", record.dns_name); }
+                }
+            }
+        }
+        // Replace from update_old by update_new
+        if let Some(new_records) = &changes.update_new {
+            if let Some(old_records) = &changes.update_old {
+                let mut old_record_iter = old_records.iter();
+                for new_record in new_records {
+                   if let Some(old_record) = old_record_iter.next() {
+                        if old_record.dns_name != new_record.dns_name {
+                            warn!("skip replace for records {:?} -> {:?}", old_record, new_record);
+                            continue;
+                        }
+                        match host_records.get_mut(&old_record.dns_name) {
+                            Some(ips) => {
+                                ips.retain(|ip| !old_record.targets.contains(&ip));
+                                for ip in &new_record.targets {
+                                    if !ips.insert(ip.clone()) {
+                                        warn!("hosts {} all_ready contains {ip}", new_record.dns_name);
+                                    }
+                                }
+                            }
+                            None => { warn!("replace {} isn't in hosts", &old_record.dns_name);
+                            if let Some(e) = host_records.insert(
+                                new_record.dns_name.clone(),
+                                new_record.targets.clone().into_iter().collect()) {
+                                    warn!("cannot add {new_record:?} : {e:?}");
+                                }
+                            }
+                        }
+                    } else {
+                        warn!("Cannot iterate on old_records");
+                    }
+                }
+            } else {
+                warn!("No changes.OldRecords and Some(changes.NewRecords)");
+            }
+        } else if let Some(_) = &changes.update_old {
+            warn!("No changes.NewRecords and Some(changes.OldRecords)");
+        }
+        // Finaly replace hosts
+        if let Err(e) = write_host(&host_records) {
+            error!("Failed to write host file : {e}");
+            res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
+            res.render(Text::Plain(format!("Failed to write host file : {e}")));
+            return;
+        }
+    }
+
     // Set Content-Type Header with Accept Header
     if let Some(v) = req.header("Accept") {
         let accept_header_value: String = v;
