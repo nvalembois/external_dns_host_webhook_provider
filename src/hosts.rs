@@ -53,7 +53,7 @@ pub fn write_host(records: &HashMap<String,HashSet<String>>) -> std::io::Result<
     // Ouvre le fichier hosts en lecture
     let mut file = std::fs::OpenOptions::new()
         .write(true)
-        .create(true)
+        .truncate(true)
         .open(&CONFIG.host_file_path)?;
     
     for (name, ips)  in records {
