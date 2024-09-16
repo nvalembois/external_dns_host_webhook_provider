@@ -5,6 +5,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use tracing::{info,error};
 use crate::config::CONFIG;
+use chrono::Local;
 
 static HOST_REGEXP: &str = r"(?m)^\s*(?P<address>[0-9\.:]+)\s+(?P<name>[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)\s*$";
 
@@ -55,7 +56,11 @@ pub fn write_host(records: &HashMap<String,HashSet<String>>) -> std::io::Result<
         .write(true)
         .truncate(true)
         .open(&CONFIG.host_file_path)?;
-    
+
+    // Write date in file
+    file.write_all(format!("# File generated at {}\n",
+            Local::now().format("%Y-%m-%d %H:%M:%S")).as_bytes())?;
+
     for (name, ips)  in records {
         for ip in ips {
             file.write_all(format!("{ip} {name}\n").as_bytes())?;
