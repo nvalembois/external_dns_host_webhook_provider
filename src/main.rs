@@ -61,7 +61,9 @@ async fn main() {
     info!("Config: exclude={}", &CONFIG.domain_filter.exclude.join(","));
     info!("Config: regex={}", &CONFIG.domain_filter.regex);
     info!("Config: regex_exclusion={}", &CONFIG.domain_filter.regex_exclusion);
-    info!("Config: host_file_path={}", &CONFIG.host_file_path);
+    info!("Config: host_configmap_name={}", &CONFIG.host_configmap_name);
+    info!("Config: host_configmap_namespace={}", &CONFIG.host_configmap_namespace);
+    info!("Config: host_configmap_key={}", &CONFIG.host_configmap_key);
     info!("Config: listen_addr={}", &CONFIG.listen_addr);
     info!("Config: health_listen_addr={}", &CONFIG.health_listen_addr);
     info!("Config: dry_run={}", &CONFIG.dry_run);

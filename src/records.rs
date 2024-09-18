@@ -68,7 +68,17 @@ pub type Records = Vec<Endpoint>;
 pub async fn get_records(req: &mut Request, res: &mut Response) {
     // Variable à retourner
     let mut entrypoints: Vec<Endpoint> = Vec::new();
-    for (name, ips) in read_host() {
+    let records = match read_host().await {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Erreur de récupération des données {e}");
+            res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
+            res.render(Text::Plain(format!("Erreur de récupération des données {e}")));
+            return;
+        }
+    };
+
+    for (name, ips) in records {
         if CONFIG.debug {
             let mut msg = String::from("return record: ");
             msg += &name.clone();
@@ -155,7 +165,16 @@ pub async fn post_records(req: &mut Request, res: &mut Response) {
     }
 
     if !CONFIG.dry_run {
-        let mut host_records = read_host();
+        let mut host_records= match read_host().await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Erreur de récupération des données {e}");
+                res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
+                res.render(Text::Plain(format!("Erreur de récupération des données {e}")));
+                return;
+            }
+        };
+
         // Add create items to records
         if let Some(records) = &changes.create {
             for record in records {
@@ -216,10 +235,10 @@ pub async fn post_records(req: &mut Request, res: &mut Response) {
             warn!("No changes.NewRecords and Some(changes.OldRecords)");
         }
         // Finaly replace hosts
-        if let Err(e) = write_host(&host_records) {
+        if let Err(e) = write_host(&host_records).await {
             error!("Failed to write host file : {e}");
             res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
-            res.render(Text::Plain(format!("Failed to write host file : {e}")));
+            res.render(Text::Plain(format!("Failed to patch configmap : {e}")));
             return;
         }
     }

@@ -1,71 +1,108 @@
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::io::{BufRead, BufReader, Write};
+use clap::error::Error;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use tracing::{info,error};
+use tracing::info;
 use crate::config::CONFIG;
 use chrono::Local;
+
+use kube::{api::{Api, Patch, PatchParams}, Client};
+use k8s_openapi::api::core::v1::ConfigMap;
+use serde_json::json;
+use std::collections::BTreeMap;
 
 static HOST_REGEXP: &str = r"(?m)^\s*(?P<address>[0-9\.:]+)\s+(?P<name>[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)\s*$";
 
 // return HashMap<name, ips>
-pub fn read_host() -> HashMap<String,HashSet<String>> {
+pub async fn read_host() -> Result<HashMap<String,HashSet<String>>, kube::Error> {
     let mut records: HashMap<String,HashSet<String>> = HashMap::new();
     static RE: Lazy<Regex> = Lazy::new(|| Regex::new(&HOST_REGEXP).unwrap());
 
-    // Ouvre le fichier hosts en lecture
-    let file = match File::open(&CONFIG.host_file_path) {
-        Ok(f) => f,
+    // Création d'un client de l'APIServer avec la configuration par défaut (variables d'environnement ou fichiers)
+    let client: Client = match Client::try_default().await {
+        Ok(v) => v,
         Err(e) => {
-            error!("Erreur lors de l'ouverture du fichier hosts: {}", e);
-            return records;
+            return Err(e);
         }
     };
-
-    let reader = BufReader::new(file);
+    
+    // Création d'une interface pour interroger les ConfigMap
+    let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), &CONFIG.host_configmap_namespace);
+    
+    // Récupération de la config map conténant les données
+    let cm: ConfigMap = match configmaps.get(&CONFIG.host_configmap_name).await {
+        Ok(v) => v,
+        Err(e) => {
+            return Err(e);
+        }
+    };
+    
+    // Récupération du contenu du fichier host dans la clé du configmap
+    let lines: String = match cm.data {
+        Some(data) => {
+            match data.get(&CONFIG.host_configmap_key) {
+                Some(v) => v.to_string(),
+                None => String::from(""),
+            }
+        },
+        None => String::from(""),
+    };
 
     // Parcourt chaque ligne du fichier hosts
-    for line in reader.lines() {
-        match line {
-            Ok(l) => {
-                if let Some(parts) = RE.captures(&l) {
-                    // Extraction et conversion des captures en String
-                    let name = parts.name("name").unwrap().as_str().to_string();
-                    let address = parts.name("address").unwrap().as_str().to_string();
+    for line in lines.lines() {
+        if let Some(parts) = RE.captures(&line) {
+            // Extraction et conversion des captures en String
+            let name = parts.name("name").unwrap().as_str().to_string();
+            let address = parts.name("address").unwrap().as_str().to_string();
 
-                    // Ajout de l'adresse dans le vecteur correspondant à la clé 'name'
-                    records.entry(name)
-                        .or_insert_with(HashSet::new)
-                        .insert(address);
-                } else {
-                    info!("Skip host line: {l}");
-                }
-            }
-            Err(e) => {
-                error!("Erreur lors de la lecture du fichier hosts: {}", e);
-            }
+            // Ajout de l'adresse dans le vecteur correspondant à la clé 'name'
+            records.entry(name)
+                .or_insert_with(HashSet::new)
+                .insert(address);
+        } else {
+            info!("Skip host line: {line}");
         }
     }
-    records
+
+    // Renvoi le résultat
+    Ok(records)
 }
 
-pub fn write_host(records: &HashMap<String,HashSet<String>>) -> std::io::Result<()> {
-    // Ouvre le fichier hosts en lecture
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .truncate(true)
-        .open(&CONFIG.host_file_path)?;
-
-    // Write date in file
-    file.write_all(format!("# File generated at {}\n",
-            Local::now().format("%Y-%m-%d %H:%M:%S")).as_bytes())?;
-
-    for (name, ips)  in records {
+fn format_records(records: &HashMap<String,HashSet<String>>) -> String {
+    records.iter().fold(String::new(), |mut acc, (name, ips)| {
         for ip in ips {
-            file.write_all(format!("{ip} {name}\n").as_bytes())?;
+            acc.push_str(&format!("{ip} {name}\n"));
         }
-    }
-    file.flush()?;
+        acc
+    })
+}
+
+pub async fn write_host(records: &HashMap<String,HashSet<String>>) -> Result<(),kube::Error> {
+    // Création d'un client de l'APIServer avec la configuration par défaut (variables d'environnement ou fichiers)
+    let client: Client = match Client::try_default().await {
+        Ok(v) => v,
+        Err(e) => {
+            return Err(e);
+        }
+    };
+    
+    // Création d'une interface pour interroger les ConfigMap
+    let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), &CONFIG.host_configmap_namespace);
+    
+    // Création du dictionnaire des données à modifier
+    let mut new_data = BTreeMap::new();
+    new_data.insert(&CONFIG.host_configmap_key, format_records(&records)); // Exemple de modification
+
+    // Créer un patch JSON pour modifier le ConfigMap
+    let patch = json!({
+        "data": new_data
+    });
+
+    // Paramètres de patch : On spécifie que c'est un merge patch
+    static PATCH_PARAMS: Lazy<PatchParams> = Lazy::new(|| PatchParams::apply("external-dns-webhhok"));
+
+    // Patcher le ConfigMap
+    configmaps.patch(&CONFIG.host_configmap_name, &PATCH_PARAMS, &Patch::Merge(&patch)).await?;
+
     Ok(())
 }
