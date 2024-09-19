@@ -11,16 +11,22 @@ use std::collections::BTreeMap;
 
 static HOST_REGEXP: &str = r"(?m)^\s*(?P<address>[0-9\.:]+)\s+(?P<name>[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)\s*$";
 
+async fn get_configmaps() -> Result<Api<ConfigMap>, kube::Error> {
+    // Création du client
+    let client: Client = Client::try_default().await?;
+    // Création d'une interface pour interroger les ConfigMap
+    let configmaps: Api<ConfigMap> = Api::namespaced(Client::try_default().await?,
+         CONFIG.host_configmap_namespace.as_deref().unwrap_or_else(|| client.default_namespace()));
+    Ok(configmaps)
+}
+
 // return HashMap<name, ips>
 pub async fn read_host() -> Result<HashMap<String,HashSet<String>>, kube::Error> {
     let mut records: HashMap<String,HashSet<String>> = HashMap::new();
     static RE: Lazy<Regex> = Lazy::new(|| Regex::new(&HOST_REGEXP).unwrap());
 
-    // Création d'un client de l'APIServer avec la configuration par défaut (variables d'environnement ou fichiers)
-    let client: Client = Client::try_default().await?;
-    // Création d'une interface pour interroger les ConfigMap
-    let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), client.default_namespace());
-    
+    let configmaps = get_configmaps().await?;
+
     // Récupération de la config map conténant les données
     let cm: ConfigMap = configmaps.get(&CONFIG.host_configmap_name).await?;
     
@@ -122,10 +128,8 @@ async fn patch_cm(configmaps: &Api<ConfigMap>, records: &HashMap<String,HashSet<
 }
 
 pub async fn write_host(records: &HashMap<String,HashSet<String>>) -> Result<(),kube::Error> {
-    // Création d'un client de l'APIServer avec la configuration par défaut (variables d'environnement ou fichiers)
-    let client: Client = Client::try_default().await?;
     // Création d'une interface pour interroger les ConfigMap
-    let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), client.default_namespace());
+    let configmaps = get_configmaps().await?;
 
     if exists_cm(&configmaps).await {
         patch_cm(&configmaps, &records).await
