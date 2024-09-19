@@ -4,7 +4,7 @@ use regex::Regex;
 use tracing::info;
 use crate::config::CONFIG;
 
-use kube::{api::{Api, Patch, PatchParams, PostParams}, Client};
+use kube::{api::{Api, ListParams, Patch, PatchParams, PostParams}, Client};
 use k8s_openapi::api::core::v1::ConfigMap;
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -19,7 +19,7 @@ pub async fn read_host() -> Result<HashMap<String,HashSet<String>>, kube::Error>
     // Création d'un client de l'APIServer avec la configuration par défaut (variables d'environnement ou fichiers)
     let client: Client = Client::try_default().await?;
     // Création d'une interface pour interroger les ConfigMap
-    let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), &CONFIG.host_configmap_namespace);
+    let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), client.default_namespace());
     
     // Récupération de la config map conténant les données
     let cm: ConfigMap = configmaps.get(&CONFIG.host_configmap_name).await?;
@@ -65,8 +65,12 @@ fn format_records(records: &HashMap<String,HashSet<String>>) -> String {
 }
 
 async fn exists_cm(configmaps: &Api<ConfigMap>)-> bool {
+    // Paramètres de la liste (ici on récupère toutes les ConfigMaps)
+    static LP: Lazy<ListParams> = Lazy::new(|| ListParams::default()
+            .fields(&format!("metadata.name={}", CONFIG.host_configmap_name.clone())));
+
     // Lister toutes les ConfigMaps dans le namespace
-    let list = match configmaps.list(&Default::default()).await {
+    let list = match configmaps.list(&LP).await {
         Ok(v) => v,
         Err(_) => {return false;}
     };
@@ -121,7 +125,7 @@ pub async fn write_host(records: &HashMap<String,HashSet<String>>) -> Result<(),
     // Création d'un client de l'APIServer avec la configuration par défaut (variables d'environnement ou fichiers)
     let client: Client = Client::try_default().await?;
     // Création d'une interface pour interroger les ConfigMap
-    let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), &CONFIG.host_configmap_namespace);
+    let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), client.default_namespace());
 
     if exists_cm(&configmaps).await {
         patch_cm(&configmaps, &records).await
