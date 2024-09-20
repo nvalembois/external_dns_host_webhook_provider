@@ -1,41 +1,34 @@
 use std::collections::{HashMap, HashSet};
-use clap::error::Error;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use tracing::info;
 use crate::config::CONFIG;
-use chrono::Local;
 
-use kube::{api::{Api, Patch, PatchParams}, Client};
+use kube::{api::{Api, ListParams, Patch, PatchParams, PostParams}, Client};
 use k8s_openapi::api::core::v1::ConfigMap;
 use serde_json::json;
 use std::collections::BTreeMap;
 
 static HOST_REGEXP: &str = r"(?m)^\s*(?P<address>[0-9\.:]+)\s+(?P<name>[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)\s*$";
 
+async fn get_configmaps() -> Result<Api<ConfigMap>, kube::Error> {
+    // Création du client
+    let client: Client = Client::try_default().await?;
+    // Création d'une interface pour interroger les ConfigMap
+    let configmaps: Api<ConfigMap> = Api::namespaced(Client::try_default().await?,
+         CONFIG.host_configmap_namespace.as_deref().unwrap_or_else(|| client.default_namespace()));
+    Ok(configmaps)
+}
+
 // return HashMap<name, ips>
 pub async fn read_host() -> Result<HashMap<String,HashSet<String>>, kube::Error> {
     let mut records: HashMap<String,HashSet<String>> = HashMap::new();
     static RE: Lazy<Regex> = Lazy::new(|| Regex::new(&HOST_REGEXP).unwrap());
 
-    // Création d'un client de l'APIServer avec la configuration par défaut (variables d'environnement ou fichiers)
-    let client: Client = match Client::try_default().await {
-        Ok(v) => v,
-        Err(e) => {
-            return Err(e);
-        }
-    };
-    
-    // Création d'une interface pour interroger les ConfigMap
-    let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), &CONFIG.host_configmap_namespace);
-    
+    let configmaps = get_configmaps().await?;
+
     // Récupération de la config map conténant les données
-    let cm: ConfigMap = match configmaps.get(&CONFIG.host_configmap_name).await {
-        Ok(v) => v,
-        Err(e) => {
-            return Err(e);
-        }
-    };
+    let cm: ConfigMap = configmaps.get(&CONFIG.host_configmap_name).await?;
     
     // Récupération du contenu du fichier host dans la clé du configmap
     let lines: String = match cm.data {
@@ -77,20 +70,47 @@ fn format_records(records: &HashMap<String,HashSet<String>>) -> String {
     })
 }
 
-pub async fn write_host(records: &HashMap<String,HashSet<String>>) -> Result<(),kube::Error> {
-    // Création d'un client de l'APIServer avec la configuration par défaut (variables d'environnement ou fichiers)
-    let client: Client = match Client::try_default().await {
+async fn exists_cm(configmaps: &Api<ConfigMap>)-> bool {
+    // Paramètres de la liste (ici on récupère toutes les ConfigMaps)
+    static LP: Lazy<ListParams> = Lazy::new(|| ListParams::default()
+            .fields(&format!("metadata.name={}", CONFIG.host_configmap_name.clone())));
+
+    // Lister toutes les ConfigMaps dans le namespace
+    let list = match configmaps.list(&LP).await {
         Ok(v) => v,
-        Err(e) => {
-            return Err(e);
-        }
+        Err(_) => {return false;}
     };
-    
-    // Création d'une interface pour interroger les ConfigMap
-    let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), &CONFIG.host_configmap_namespace);
-    
+
+    // Parcourir la liste et vérifier si la ConfigMap existe
+    return list.iter().any(|cm| cm.metadata.name.as_deref() == Some(&CONFIG.host_configmap_name));
+
+}
+
+async fn create_cm(configmaps: &Api<ConfigMap>, records: &HashMap<String,HashSet<String>>)-> Result<(),kube::Error> {
+    // Créer les données pour la ConfigMap
+    let mut data = BTreeMap::new();
+    data.insert(CONFIG.host_configmap_name.clone(), format_records(&records));
+
+    // Définir la ConfigMap
+    let cm = ConfigMap {
+        metadata: kube::api::ObjectMeta {
+            name: Some(CONFIG.host_configmap_name.clone()),
+            ..Default::default()
+        },
+        data: Some(data),
+        ..Default::default()
+    };
+
+    // Créer la ConfigMap sur le cluster
+    let pp = PostParams::default();
+    configmaps.create(&pp, &cm).await?;
+
+    Ok(())
+}
+
+async fn patch_cm(configmaps: &Api<ConfigMap>, records: &HashMap<String,HashSet<String>>)-> Result<(),kube::Error> {
     // Création du dictionnaire des données à modifier
-    let mut new_data = BTreeMap::new();
+    let mut new_data: BTreeMap<&String, String> = BTreeMap::new();
     new_data.insert(&CONFIG.host_configmap_key, format_records(&records)); // Exemple de modification
 
     // Créer un patch JSON pour modifier le ConfigMap
@@ -105,4 +125,15 @@ pub async fn write_host(records: &HashMap<String,HashSet<String>>) -> Result<(),
     configmaps.patch(&CONFIG.host_configmap_name, &PATCH_PARAMS, &Patch::Merge(&patch)).await?;
 
     Ok(())
+}
+
+pub async fn write_host(records: &HashMap<String,HashSet<String>>) -> Result<(),kube::Error> {
+    // Création d'une interface pour interroger les ConfigMap
+    let configmaps = get_configmaps().await?;
+
+    if exists_cm(&configmaps).await {
+        patch_cm(&configmaps, &records).await
+    } else {
+        create_cm(&configmaps, &records).await
+    }
 }

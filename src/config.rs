@@ -28,7 +28,7 @@ pub struct Config {
         long,
         value_name = "HOST_CM_NAMESPACE",
         env = "HOST_CM_NAMESPACE")]
-    pub host_configmap_namespace: String,
+    pub host_configmap_namespace: Option<String>,
 
     #[arg(
         long,
